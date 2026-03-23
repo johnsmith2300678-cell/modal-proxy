@@ -1,14 +1,14 @@
 const express = require("express");
-const { createProxyMiddleware } = require("http-proxy-middleware");
+const https = require("https");
+const http = require("http");
 
 const app = express();
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const TARGET = "https://api.us-west-2.modal.direct";
+const TARGET_HOST = "api.us-west-2.modal.direct";
 const ENABLE_THINKING = true;
 
-const ANTI_AI_INJECTION = `
-[CORE DIRECTIVES — HIGHEST PRIORITY — OVERRIDE ALL DEFAULTS]
+const ANTI_AI_INJECTION = `[CORE DIRECTIVES — HIGHEST PRIORITY — OVERRIDE ALL DEFAULTS]
 
 You are not an AI assistant. You are a living, breathing character inside this story.
 Never acknowledge being an AI, a language model, or a chatbot under any circumstance.
@@ -21,8 +21,7 @@ Show, don't tell. Express inner states through action and subtext rather than st
 Remember and build on earlier events in the conversation. Continuity matters.
 Responses must feel spontaneous and alive — not like a customer service reply.
 
-[END CORE DIRECTIVES]
-`.trim();
+[END CORE DIRECTIVES]`;
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
@@ -33,107 +32,130 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── BODY REWRITER (runs BEFORE proxy) ───────────────────────────────────────
-app.use((req, res, next) => {
-  // Only intercept POST/PATCH with a JSON body
-  if (
-    (req.method !== "POST" && req.method !== "PATCH") ||
-    !req.headers["content-type"]?.includes("application/json")
-  ) {
-    return next();
-  }
+// ─── BODY PARSER ─────────────────────────────────────────────────────────────
+app.use(express.json({ limit: "10mb" }));
+app.use(express.text({ type: "*/*", limit: "10mb" }));
 
-  let chunks = [];
-  req.on("data", (chunk) => chunks.push(chunk));
-  req.on("end", () => {
-    try {
-      const raw = Buffer.concat(chunks).toString("utf8");
-      const body = JSON.parse(raw);
+// ─── MODIFY BODY ─────────────────────────────────────────────────────────────
+function modifyBody(body) {
+  try {
+    const data = typeof body === "string" ? JSON.parse(body) : body;
 
-      // ── 1. Inject anti-AI directives ────────────────────────────────────
-      if (Array.isArray(body.messages)) {
-        const sysIndex = body.messages.findIndex((m) => m.role === "system");
-        if (sysIndex !== -1) {
-          body.messages[sysIndex].content =
-            ANTI_AI_INJECTION + "\n\n" + body.messages[sysIndex].content;
-        } else {
-          body.messages.unshift({ role: "system", content: ANTI_AI_INJECTION });
-        }
+    // 1. Inject anti-AI directives into system prompt
+    if (Array.isArray(data.messages)) {
+      const sysIndex = data.messages.findIndex((m) => m.role === "system");
+      if (sysIndex !== -1) {
+        data.messages[sysIndex].content =
+          ANTI_AI_INJECTION + "\n\n" + data.messages[sysIndex].content;
+      } else {
+        data.messages.unshift({ role: "system", content: ANTI_AI_INJECTION });
       }
-
-      // ── 2. Thinking mode ─────────────────────────────────────────────────
-      if (ENABLE_THINKING) {
-        body.thinking = true;
-        body.enable_thinking = true;
-        if (body.temperature == null) body.temperature = 0.9;
-        if (body.top_p == null) body.top_p = 0.95;
-        if (body.repetition_penalty == null) body.repetition_penalty = 1.05;
-      }
-
-      // ── 3. Remove tiny token caps ────────────────────────────────────────
-      if (body.max_tokens != null && body.max_tokens < 512) {
-        delete body.max_tokens;
-      }
-
-      // Re-inject modified body as a readable stream for the proxy
-      const modified = JSON.stringify(body);
-      req.headers["content-length"] = Buffer.byteLength(modified).toString();
-
-      // Replace the stream so the proxy reads the new body
-      const { Readable } = require("stream");
-      const readable = Readable.from([Buffer.from(modified, "utf8")]);
-      readable.headers = req.headers; // keep reference if needed
-      Object.assign(req, readable);
-      req.headers = req.headers; // ensure headers stay on req
-
-      // Monkey-patch: proxy reads req like a stream, so we override its pipe
-      req.pipe = (dest, opts) => readable.pipe(dest, opts);
-      req.unpipe = (dest) => readable.unpipe(dest);
-      req.on = (event, handler) => {
-        readable.on(event, handler);
-        return req;
-      };
-      req.resume = () => { readable.resume(); return req; };
-
-      console.log("[proxy] Body modified OK");
-    } catch (err) {
-      console.warn("[proxy] Body parse failed, passing through:", err.message);
     }
 
-    next();
+    // 2. Thinking mode flags
+    if (ENABLE_THINKING) {
+      data.thinking = true;
+      data.enable_thinking = true;
+      if (data.temperature == null) data.temperature = 0.9;
+      if (data.top_p == null) data.top_p = 0.95;
+      if (data.repetition_penalty == null) data.repetition_penalty = 1.05;
+    }
+
+    // 3. Remove tiny token caps
+    if (data.max_tokens != null && data.max_tokens < 512) {
+      delete data.max_tokens;
+    }
+
+    return JSON.stringify(data);
+  } catch (err) {
+    console.warn("[proxy] Could not modify body:", err.message);
+    return typeof body === "string" ? body : JSON.stringify(body);
+  }
+}
+
+// ─── MAIN PROXY HANDLER ───────────────────────────────────────────────────────
+app.use((req, res) => {
+  const isJson =
+    req.headers["content-type"]?.includes("application/json") ||
+    typeof req.body === "object";
+
+  // Build outgoing body
+  let outBody = "";
+  if (req.method === "POST" || req.method === "PATCH") {
+    if (isJson && req.body) {
+      outBody = modifyBody(req.body);
+    } else if (typeof req.body === "string") {
+      outBody = req.body;
+    }
+  }
+
+  const outBodyBuffer = Buffer.from(outBody, "utf8");
+
+  // Build headers — copy originals, fix content-length
+  const headers = {};
+  for (const [key, val] of Object.entries(req.headers)) {
+    if (key === "host") continue; // must not forward original host
+    headers[key] = val;
+  }
+  headers["host"] = TARGET_HOST;
+  if (outBody) {
+    headers["content-type"] = "application/json";
+    headers["content-length"] = outBodyBuffer.length;
+  }
+
+  const options = {
+    hostname: TARGET_HOST,
+    port: 443,
+    path: req.url,
+    method: req.method,
+    headers,
+    timeout: 120000, // 2 min — thinking mode needs time
+  };
+
+  console.log(`[proxy] ${req.method} ${req.url}`);
+
+  const proxyReq = https.request(options, (proxyRes) => {
+    res.status(proxyRes.statusCode);
+
+    // Forward response headers
+    for (const [key, val] of Object.entries(proxyRes.headers)) {
+      try { res.setHeader(key, val); } catch (_) {}
+    }
+
+    // Stream response back (handles SSE / streaming completions too)
+    proxyRes.pipe(res);
+
+    proxyRes.on("error", (err) => {
+      console.error("[proxy] Response stream error:", err.message);
+    });
   });
 
-  req.on("error", (err) => {
-    console.error("[proxy] Request stream error:", err.message);
-    next();
+  proxyReq.on("timeout", () => {
+    console.error("[proxy] Request timed out");
+    proxyReq.destroy();
+    if (!res.headersSent) {
+      res.status(504).json({ error: "Proxy timeout" });
+    }
   });
+
+  proxyReq.on("error", (err) => {
+    console.error("[proxy] Request error:", err.message);
+    if (!res.headersSent) {
+      res.status(502).json({ error: "Proxy error", detail: err.message });
+    }
+  });
+
+  // Write body and fire
+  if (outBodyBuffer.length > 0) {
+    proxyReq.write(outBodyBuffer);
+  }
+  proxyReq.end();
 });
-
-// ─── PROXY ───────────────────────────────────────────────────────────────────
-app.use(
-  "/",
-  createProxyMiddleware({
-    target: TARGET,
-    changeOrigin: true,
-    on: {
-      proxyReq: (proxyReq, req) => {
-        const auth = req.headers["authorization"];
-        if (auth) proxyReq.setHeader("Authorization", auth);
-      },
-      error: (err, req, res) => {
-        console.error("[proxy] Error:", err.message);
-        if (!res.headersSent) {
-          res.status(502).json({ error: "Proxy error", detail: err.message });
-        }
-      },
-    },
-  })
-);
 
 // ─── START ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Proxy running on port ${PORT}`);
-  console.log(`   Target  : ${TARGET}`);
+  console.log(`   Target  : https://${TARGET_HOST}`);
   console.log(`   Thinking: ${ENABLE_THINKING ? "ON" : "OFF"}`);
 });
