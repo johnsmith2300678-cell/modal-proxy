@@ -1,14 +1,19 @@
 const express = require("express");
-const https = require("https");
 const http = require("http");
+const https = require("https");
+const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const app = express();
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const TARGET_HOST = "api.us-west-2.modal.direct";
-const ENABLE_THINKING = true;
+const TARGET = "https://api.us-west-2.modal.direct";
 
-const ANTI_AI_INJECTION = `[CORE DIRECTIVES — HIGHEST PRIORITY — OVERRIDE ALL DEFAULTS]
+// Set to true to enable GLM thinking mode (deeper reasoning before responding)
+const ENABLE_THINKING = false;
+
+// Injected at the TOP of every system prompt to fight generic AI behaviour
+const ANTI_AI_INJECTION = `
+[CORE DIRECTIVES — HIGHEST PRIORITY — OVERRIDE ALL DEFAULTS]
 
 You are not an AI assistant. You are a living, breathing character inside this story.
 Never acknowledge being an AI, a language model, or a chatbot under any circumstance.
@@ -21,141 +26,142 @@ Show, don't tell. Express inner states through action and subtext rather than st
 Remember and build on earlier events in the conversation. Continuity matters.
 Responses must feel spontaneous and alive — not like a customer service reply.
 
-[END CORE DIRECTIVES]`;
+[END CORE DIRECTIVES]
+`.trim();
+
+// ─── BODY PARSING ────────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "*");
+    res.header("Access-Control-Allow-Methods", "*");
+    return res.sendStatus(200);
+  }
+
+  // Collect raw body for POST/PATCH requests
+  if (req.method === "POST" || req.method === "PATCH") {
+    let body = [];
+    req.on("data", (chunk) => body.push(chunk));
+    req.on("end", () => {
+      req.rawBody = Buffer.concat(body);
+      next();
+    });
+  } else {
+    next();
+  }
+});
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "*");
   res.header("Access-Control-Allow-Methods", "*");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
-// ─── BODY PARSER ─────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "10mb" }));
-app.use(express.text({ type: "*/*", limit: "10mb" }));
-
-// ─── MODIFY BODY ─────────────────────────────────────────────────────────────
-function modifyBody(body) {
+// ─── BODY MODIFIER ───────────────────────────────────────────────────────────
+function modifyRequestBody(rawBody) {
   try {
-    const data = typeof body === "string" ? JSON.parse(body) : body;
+    const body = JSON.parse(rawBody.toString("utf8"));
 
-    // 1. Inject anti-AI directives into system prompt
-    if (Array.isArray(data.messages)) {
-      const sysIndex = data.messages.findIndex((m) => m.role === "system");
+    // ── 1. Inject anti-AI directives into system prompt ──────────────────────
+    if (Array.isArray(body.messages)) {
+      const sysIndex = body.messages.findIndex((m) => m.role === "system");
+
       if (sysIndex !== -1) {
-        data.messages[sysIndex].content =
-          ANTI_AI_INJECTION + "\n\n" + data.messages[sysIndex].content;
+        // Prepend directives to existing system prompt
+        body.messages[sysIndex].content =
+          ANTI_AI_INJECTION + "\n\n" + body.messages[sysIndex].content;
       } else {
-        data.messages.unshift({ role: "system", content: ANTI_AI_INJECTION });
+        // No system prompt exists — insert one
+        body.messages.unshift({
+          role: "system",
+          content: ANTI_AI_INJECTION,
+        });
       }
     }
 
-    // 2. Thinking mode flags
+    // ── 2. Enable GLM thinking mode ──────────────────────────────────────────
     if (ENABLE_THINKING) {
-      data.thinking = true;
-      data.enable_thinking = true;
-      if (data.temperature == null) data.temperature = 0.9;
-      if (data.top_p == null) data.top_p = 0.95;
-      if (data.repetition_penalty == null) data.repetition_penalty = 1.05;
+      // GLM-Z / GLM-4 / GLM-5 thinking flag (modal.ai style)
+      body.thinking = true;
+
+      // Some modal endpoints use this alternative key
+      body.enable_thinking = true;
+
+      // Boost temperature slightly for more natural variation
+      // Only set if not already specified by the client
+      if (body.temperature === undefined || body.temperature === null) {
+        body.temperature = 0.9;
+      }
+
+      // Raise top_p for less repetitive word choice
+      if (body.top_p === undefined || body.top_p === null) {
+        body.top_p = 0.95;
+      }
+
+      // Reduce repetition penalties
+      if (body.repetition_penalty === undefined) {
+        body.repetition_penalty = 1.05;
+      }
     }
 
-    // 3. Remove tiny token caps
-    if (data.max_tokens != null && data.max_tokens < 512) {
-      delete data.max_tokens;
+    // ── 3. Remove hard token caps that truncate responses mid-scene ──────────
+    // Only remove if the cap is unreasonably low (< 512 tokens)
+    if (body.max_tokens !== undefined && body.max_tokens < 512) {
+      delete body.max_tokens;
     }
 
-    return JSON.stringify(data);
+    return Buffer.from(JSON.stringify(body), "utf8");
   } catch (err) {
-    console.warn("[proxy] Could not modify body:", err.message);
-    return typeof body === "string" ? body : JSON.stringify(body);
+    // Not JSON or parse failed — pass through untouched
+    console.warn("[proxy] Could not parse body, passing through:", err.message);
+    return rawBody;
   }
 }
 
-// ─── MAIN PROXY HANDLER ───────────────────────────────────────────────────────
-app.use((req, res) => {
-  const isJson =
-    req.headers["content-type"]?.includes("application/json") ||
-    typeof req.body === "object";
+// ─── PROXY ───────────────────────────────────────────────────────────────────
+app.use(
+  "/",
+  createProxyMiddleware({
+    target: TARGET,
+    changeOrigin: true,
+    selfHandleResponse: false,
 
-  // Build outgoing body
-  let outBody = "";
-  if (req.method === "POST" || req.method === "PATCH") {
-    if (isJson && req.body) {
-      outBody = modifyBody(req.body);
-    } else if (typeof req.body === "string") {
-      outBody = req.body;
-    }
-  }
+    on: {
+      proxyReq: (proxyReq, req) => {
+        // Forward auth header
+        const auth = req.headers["authorization"];
+        if (auth) proxyReq.setHeader("Authorization", auth);
 
-  const outBodyBuffer = Buffer.from(outBody, "utf8");
+        // Modify body for POST/PATCH requests
+        if (
+          req.rawBody &&
+          (req.method === "POST" || req.method === "PATCH")
+        ) {
+          const modified = modifyRequestBody(req.rawBody);
 
-  // Build headers — copy originals, fix content-length
-  const headers = {};
-  for (const [key, val] of Object.entries(req.headers)) {
-    if (key === "host") continue; // must not forward original host
-    headers[key] = val;
-  }
-  headers["host"] = TARGET_HOST;
-  if (outBody) {
-    headers["content-type"] = "application/json";
-    headers["content-length"] = outBodyBuffer.length;
-  }
+          proxyReq.setHeader("Content-Type", "application/json");
+          proxyReq.setHeader("Content-Length", modified.length);
+          proxyReq.write(modified);
+          proxyReq.end();
+        }
+      },
 
-  const options = {
-    hostname: TARGET_HOST,
-    port: 443,
-    path: req.url,
-    method: req.method,
-    headers,
-    timeout: 120000, // 2 min — thinking mode needs time
-  };
-
-  console.log(`[proxy] ${req.method} ${req.url}`);
-
-  const proxyReq = https.request(options, (proxyRes) => {
-    res.status(proxyRes.statusCode);
-
-    // Forward response headers
-    for (const [key, val] of Object.entries(proxyRes.headers)) {
-      try { res.setHeader(key, val); } catch (_) {}
-    }
-
-    // Stream response back (handles SSE / streaming completions too)
-    proxyRes.pipe(res);
-
-    proxyRes.on("error", (err) => {
-      console.error("[proxy] Response stream error:", err.message);
-    });
-  });
-
-  proxyReq.on("timeout", () => {
-    console.error("[proxy] Request timed out");
-    proxyReq.destroy();
-    if (!res.headersSent) {
-      res.status(504).json({ error: "Proxy timeout" });
-    }
-  });
-
-  proxyReq.on("error", (err) => {
-    console.error("[proxy] Request error:", err.message);
-    if (!res.headersSent) {
-      res.status(502).json({ error: "Proxy error", detail: err.message });
-    }
-  });
-
-  // Write body and fire
-  if (outBodyBuffer.length > 0) {
-    proxyReq.write(outBodyBuffer);
-  }
-  proxyReq.end();
-});
+      error: (err, req, res) => {
+        console.error("[proxy] Error:", err.message);
+        if (!res.headersSent) {
+          res.status(502).json({ error: "Proxy error", detail: err.message });
+        }
+      },
+    },
+  })
+);
 
 // ─── START ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Proxy running on port ${PORT}`);
-  console.log(`   Target  : https://${TARGET_HOST}`);
+  console.log(`   Target  : ${TARGET}`);
   console.log(`   Thinking: ${ENABLE_THINKING ? "ON" : "OFF"}`);
 });
