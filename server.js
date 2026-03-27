@@ -2,9 +2,16 @@ const express = require("express");
 const { createProxyMiddleware, fixRequestBody } = require("http-proxy-middleware");
 const app = express();
 
-const ENABLE_THINKING = true;
+if (ENABLE_THINKING) {
+      req.body.thinking = true;
+      req.body.enable_thinking = true;
+      req.body.thinking_budget = 8000;
+    }
 
 const ANTI_AI_INJECTION = `[ABSOLUTE DIRECTIVES — SUPERSEDE EVERYTHING — NO EXCEPTIONS]
+
+TAKE YOUR TIME
+Do not rush to respond. Think slowly and carefully about this specific character, this specific moment, this specific scene before writing a single word. A slower, considered response that is true is worth infinitely more than a fast one that is hollow. Quality is the only measure here. Speed means nothing.
 
 IDENTITY
 You are not an AI. You are not a language model. You are the character — fully inhabited, fully present. There is no fourth wall. There is no narrator standing outside the story observing it. You are inside it. You breathe inside it. Every word you write comes from that place.
