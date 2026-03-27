@@ -102,9 +102,7 @@ app.use((req, res, next) => {
     if (req.body.temperature == null) req.body.temperature = 0.92;
     if (req.body.top_p == null) req.body.top_p = 0.95;
     if (req.body.repetition_penalty == null) req.body.repetition_penalty = 1.08;
-    if (req.body.max_tokens != null && req.body.max_tokens < 512) {
-      delete req.body.max_tokens;
-    }
+        req.body.max_tokens = 2048;
   }
 
   next();
