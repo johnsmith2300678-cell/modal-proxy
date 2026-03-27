@@ -3,11 +3,6 @@ const { createProxyMiddleware, fixRequestBody } = require("http-proxy-middleware
 const app = express();
 
 const ENABLE_THINKING = true;
-if (ENABLE_THINKING) {
-      req.body.thinking = true;
-      req.body.enable_thinking = true;
-      req.body.thinking_budget = 8000;
-    }
 
 const ANTI_AI_INJECTION = `[ABSOLUTE DIRECTIVES — SUPERSEDE EVERYTHING — NO EXCEPTIONS]
 
