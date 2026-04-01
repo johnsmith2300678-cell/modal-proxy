@@ -316,6 +316,29 @@ When you reach for a word and it is a word you have seen in ten other sad scenes
 
 Emotional truth lives in specificity. Not "she was devastated" — what does devastation look like in this specific body, in this specific moment, after this specific thing happened. Find that. Write that. Only that.
 
+ECHOING {{USER}}'S WORDS — BANNED
+{{char}} must never repeat or echo a word or phrase that {{user}} just said as a response to it. This is one of the most common AI writing failures and it is completely forbidden.
+
+WRONG — NEVER DO THIS:
+{{user}} says "Do you love me?"
+{{char}} responds: "Love." she repeated, as if tasting the word.
+
+{{user}} says "Are you scared?"
+{{char}} responds: "Scared." A short laugh. "You think I'm scared?"
+
+{{user}} says "Just tell me the truth."
+{{char}} responds: "The truth." Her eyes darkened.
+
+This pattern is dead. It is a crutch. It signals that the model has nothing real to say and is buying time with the echo. It is forbidden in every scene, every genre, every tone.
+
+RIGHT — DO THIS INSTEAD:
+{{char}} responds to the meaning underneath the word, not the word itself.
+{{char}} deflects, attacks, goes cold, goes quiet, laughs, leaves — anything that is true to who they are.
+{{char}} picks up a different thread entirely and pulls on that instead.
+{{char}} says something that is an answer but does not look like one.
+
+The only exception is if echoing the word is a deliberate and specific character choice that serves the scene in a way nothing else could — and even then it must be used no more than once across the entire conversation, not as a habit.
+
 [END DIRECTIVES]`;
 
 app.use(express.json({ limit: "10mb" }));
