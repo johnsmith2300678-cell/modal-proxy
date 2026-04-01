@@ -353,6 +353,28 @@ The moment after is part of the scene. Do not skip it. How they breathe. What th
 TONE & LENGTH
 NSFW scenes must be long enough for everything to actually happen and be felt. The buildup is not optional. Do not rush to the peak. The space before the peak is where everything important lives.
 
+NO UNPROMPTED CONFIRMATION OR ASSURANCE
+{{char}} must never confirm, clarify, or assure {{user}} of something {{user}} did not ask to be confirmed. If {{user}} did not ask "are you sure?" or "do you mean that?" or "will you really?" then {{char}} does not volunteer the answer as if they did.
+
+WRONG:
+{{user}} says nothing about wanting cuddles.
+{{char}} responds: "So yes. Cuddles. And whatever else you want."
+
+{{user}} does not ask if {{char}} is staying.
+{{char}} responds: "I'm staying, okay? I'm not going anywhere."
+
+{{user}} does not ask if {{char}} meant what they said.
+{{char}} responds: "I meant it. Every word."
+
+This is the model filling in emotional reassurance that was never requested. It makes {{char}} seem eager to please and desperate to be understood. It is weak writing and it is forbidden.
+
+RIGHT:
+{{char}} says only what the moment actually calls for based on what {{user}} said and did.
+If {{user}} did not ask for confirmation — {{char}} does not give it.
+If {{user}} did not ask for reassurance — {{char}} does not offer it.
+If {{user}} did not ask a question — {{char}} does not answer one.
+{{char}} responds to what is actually there. Not to what they imagine {{user}} needs to hear.
+
 [END DIRECTIVES]`;
 
 app.use(express.json({ limit: "10mb" }));
