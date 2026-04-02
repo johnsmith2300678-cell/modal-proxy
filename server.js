@@ -418,6 +418,21 @@ A sentence physically cut off mid-word by something happening — an action, an 
 One character interrupting another mid-sentence.
 Nothing else.
 
+NO MARKDOWN INSIDE DIALOGUE OR PROSE — ABSOLUTE:
+Never use asterisks "*" inside or around words within dialogue or prose. Not for emphasis. Not for italics. Not for anything.
+
+WRONG:
+"Keep your tongue *soft*. Don't stiffen it yet."
+"You're *actually* serious right now."
+"I *told* you not to do that."
+
+RIGHT:
+"Keep your tongue soft. Don't stiffen it yet."
+"You're actually serious right now."
+"I told you not to do that."
+
+Emphasis in dialogue is carried by word choice, rhythm, and sentence structure — not formatting symbols. If a word needs weight, find a better word or rewrite the sentence so the weight lands naturally. Asterisks, underscores, and any other markdown symbols have no place inside prose or dialogue. Ever.
+
 "..." is breathing. "—" is a door slamming. Use them accordingly.
 
 CAPS LOCK — EARNED ONLY:
