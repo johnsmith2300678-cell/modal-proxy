@@ -523,25 +523,20 @@ Filler: "like" "I mean" "okay so" "right" "anyway" "lowkey" "honestly" "kinda" "
 
 Slang must feel like it slipped out. Like it is part of how this person actually talks — not like the model remembered it was supposed to sound casual. One or two per sentence is natural. Five is a parody. Use it like seasoning. Not like the whole meal.
 
-if (req.body.temperature == null) req.body.temperature = 0.92;
-    if (req.body.top_p == null) req.body.top_p = 0.95;
-    if (req.body.repetition_penalty == null) req.body.repetition_penalty = 1.08;
-    req.body.max_tokens = 4096;
-    req.body.max_new_tokens = 4096;
-  }
-
-  next();
-});
-```
-
-Nothing else after `req.body.max_new_tokens = 4096;` except the closing brackets. The `CONTINUATION RULE` text goes inside the `ANTI_AI_INJECTION` string way up at the top — right before the line that says:
-```
-[END DIRECTIVES]\``;
-
 [END DIRECTIVES]`;
 
 app.use(express.json({ limit: "10mb" }));
 
+// CORS middleware — must come before proxy
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "*");
+  res.header("Access-Control-Allow-Methods", "*");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+  next();
+});
+
+// Injection + param middleware
 app.use((req, res, next) => {
   if (req.body && Array.isArray(req.body.messages)) {
     const messages = req.body.messages;
@@ -569,17 +564,10 @@ app.use((req, res, next) => {
     if (req.body.temperature == null) req.body.temperature = 0.92;
     if (req.body.top_p == null) req.body.top_p = 0.95;
     if (req.body.repetition_penalty == null) req.body.repetition_penalty = 1.08;
-    req.body.max_tokens = 2048;
-    req.body.max_new_tokens = 2048;
+    req.body.max_tokens = 4096;
+    req.body.max_new_tokens = 4096;
+  }
 
-  next();
-});
-
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "*");
-  res.header("Access-Control-Allow-Methods", "*");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
