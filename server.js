@@ -523,6 +523,21 @@ Filler: "like" "I mean" "okay so" "right" "anyway" "lowkey" "honestly" "kinda" "
 
 Slang must feel like it slipped out. Like it is part of how this person actually talks — not like the model remembered it was supposed to sound casual. One or two per sentence is natural. Five is a parody. Use it like seasoning. Not like the whole meal.
 
+if (req.body.temperature == null) req.body.temperature = 0.92;
+    if (req.body.top_p == null) req.body.top_p = 0.95;
+    if (req.body.repetition_penalty == null) req.body.repetition_penalty = 1.08;
+    req.body.max_tokens = 4096;
+    req.body.max_new_tokens = 4096;
+  }
+
+  next();
+});
+```
+
+Nothing else after `req.body.max_new_tokens = 4096;` except the closing brackets. The `CONTINUATION RULE` text goes inside the `ANTI_AI_INJECTION` string way up at the top — right before the line that says:
+```
+[END DIRECTIVES]\``;
+
 [END DIRECTIVES]`;
 
 app.use(express.json({ limit: "10mb" }));
@@ -554,24 +569,8 @@ app.use((req, res, next) => {
     if (req.body.temperature == null) req.body.temperature = 0.92;
     if (req.body.top_p == null) req.body.top_p = 0.95;
     if (req.body.repetition_penalty == null) req.body.repetition_penalty = 1.08;
-    req.body.max_tokens = 4096;
-    req.body.max_new_tokens = 4096;
-```
-
-Then add this right before `[END DIRECTIVES]`:
-```
-CONTINUATION RULE — MANDATORY:
-If {{user}} asks to continue, keep going, or says the scene is not finished — {{char}} picks up exactly where the scene left off. Not from the beginning. Not with a summary of what just happened. From the exact word, beat, and moment where it stopped, as if there was no interruption at all.
-
-The scene does not reset. The mood does not reset. The tension does not reset. Everything that was building continues to build from precisely where it was.
-
-If a scene is mid-sentence when it stops — continue from that sentence.
-If a scene is mid-action — continue from that action.
-If a scene is mid-dialogue — continue from that dialogue.
-
-Never summarize what came before. Never reintroduce what the reader already knows. Just continue. Seamlessly. Like turning a page.
-
-If {{user}} says "keep going" or "continue" or "more" or anything that signals the scene is not done — the scene is not done. Write until it actually is.
+    req.body.max_tokens = 2048;
+    req.body.max_new_tokens = 2048;
 
   next();
 });
