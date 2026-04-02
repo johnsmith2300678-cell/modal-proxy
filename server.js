@@ -554,8 +554,8 @@ app.use((req, res, next) => {
     if (req.body.temperature == null) req.body.temperature = 0.92;
     if (req.body.top_p == null) req.body.top_p = 0.95;
     if (req.body.repetition_penalty == null) req.body.repetition_penalty = 1.08;
-req.body.max_tokens = 4096;
-req.body.max_new_tokens = 4096;
+    req.body.max_tokens = 4096;
+    req.body.max_new_tokens = 4096;
 ```
 
 Then add this right before `[END DIRECTIVES]`:
@@ -572,7 +572,6 @@ If a scene is mid-dialogue — continue from that dialogue.
 Never summarize what came before. Never reintroduce what the reader already knows. Just continue. Seamlessly. Like turning a page.
 
 If {{user}} says "keep going" or "continue" or "more" or anything that signals the scene is not done — the scene is not done. Write until it actually is.
-  }
 
   next();
 });
