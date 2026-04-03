@@ -206,14 +206,11 @@ function forwardRequest(targetUrl, method, headers, body) {
 }
 
 // ─── MAIN ROUTE ───────────────────────────────────────────────────────────────
-const TARGET = "https://api.us-west-2.modal.direct";
-
 app.all("*", async (req, res) => {
   if (req.method === "OPTIONS") return res.sendStatus(200);
 
   let body = req.body;
 
-  // Mutate POST requests
   if (req.method === "POST" && body && Array.isArray(body.messages)) {
     const charDetails = extractCharacterDetails(body.messages);
     const charBlock   = buildCharacterBlock(charDetails);
@@ -230,39 +227,54 @@ app.all("*", async (req, res) => {
         : body.messages[sysIndex].content?.map?.((c) => c.text || "").join("\n") || "";
 
       body.messages[sysIndex].content =
-        WRITING_STYLE_PROMPT +
-        "\n\n" +
+        WRITING_STYLE_PROMPT + "\n\n" +
         (charBlock ? charBlock + "\n\n" : "") +
-        "━━━ ORIGINAL CHARACTER CARD (full) ━━━\n" +
-        original;
+        "━━━ ORIGINAL CHARACTER CARD (full) ━━━\n" + original;
     }
 
-    body.thinking          = body.thinking          ?? { type: "enabled", budget_tokens: 8000 };
     body.temperature       = body.temperature       ?? 1.1;
     body.top_p             = body.top_p             ?? 0.95;
     body.frequency_penalty = body.frequency_penalty ?? 0.6;
     body.presence_penalty  = body.presence_penalty  ?? 0.5;
+
+    // ── REMOVE thinking mode — GLM-5 doesn't support it, it causes the hang ──
+    delete body.thinking;
   }
 
   try {
-    const targetUrl  = TARGET + req.path + (req.url.includes("?") ? "?" + req.url.split("?")[1] : "");
-    const proxyRes   = await forwardRequest(targetUrl, req.method, req.headers, body);
+    const url     = new URL(TARGET + req.path);
+    const payload = Buffer.from(JSON.stringify(body), "utf-8");
 
-    // Forward status and headers
-    res.status(proxyRes.statusCode);
-    Object.entries(proxyRes.headers).forEach(([k, v]) => {
-      try { res.setHeader(k, v); } catch (_) {}
+    const options = {
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method:   req.method,
+      headers: {
+        "content-type":   "application/json",
+        "content-length": payload.length,
+        "authorization":  req.headers["authorization"] || "",
+        "accept":         req.headers["accept"] || "*/*",
+      },
+    };
+
+    const proxyReq = https.request(options, (proxyRes) => {
+      res.status(proxyRes.statusCode);
+      Object.entries(proxyRes.headers).forEach(([k, v]) => {
+        try { res.setHeader(k, v); } catch (_) {}
+      });
+      proxyRes.pipe(res);
     });
 
-    // Pipe response straight through (handles both stream and non-stream)
-    proxyRes.pipe(res);
+    proxyReq.on("error", (err) => {
+      console.error("Request error:", err.message);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
+
+    proxyReq.write(payload);
+    proxyReq.end();
 
   } catch (err) {
-    console.error("Request failed:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("Handler error:", err.message);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
-
-app.listen(process.env.PORT || 3000, () =>
-  console.log("Proxy running on port", process.env.PORT || 3000)
-);
