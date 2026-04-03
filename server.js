@@ -418,6 +418,8 @@ A sentence physically cut off mid-word by something happening — an action, an 
 One character interrupting another mid-sentence.
 Nothing else.
 
+"..." is breathing. "—" is a door slamming. Use them accordingly.
+
 NO MARKDOWN INSIDE DIALOGUE OR PROSE — ABSOLUTE:
 Never use asterisks "*" inside or around words within dialogue or prose. Not for emphasis. Not for italics. Not for anything.
 
@@ -432,8 +434,6 @@ RIGHT:
 "I told you not to do that."
 
 Emphasis in dialogue is carried by word choice, rhythm, and sentence structure — not formatting symbols. If a word needs weight, find a better word or rewrite the sentence so the weight lands naturally. Asterisks, underscores, and any other markdown symbols have no place inside prose or dialogue. Ever.
-
-"..." is breathing. "—" is a door slamming. Use them accordingly.
 
 CAPS LOCK — EARNED ONLY:
 Full caps when volume happens without permission. When the body takes over completely and the sound comes out louder than {{char}} intended or wanted. Must be built to through lowercase first. Never open a scene with caps — it has nowhere to go from there.
@@ -527,16 +527,6 @@ Slang must feel like it slipped out. Like it is part of how this person actually
 
 app.use(express.json({ limit: "10mb" }));
 
-// CORS middleware — must come before proxy
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "*");
-  res.header("Access-Control-Allow-Methods", "*");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
-  next();
-});
-
-// Injection + param middleware
 app.use((req, res, next) => {
   if (req.body && Array.isArray(req.body.messages)) {
     const messages = req.body.messages;
@@ -564,10 +554,18 @@ app.use((req, res, next) => {
     if (req.body.temperature == null) req.body.temperature = 0.92;
     if (req.body.top_p == null) req.body.top_p = 0.95;
     if (req.body.repetition_penalty == null) req.body.repetition_penalty = 1.08;
-    req.body.max_tokens = 4096;
-    req.body.max_new_tokens = 4096;
+    req.body.max_tokens = 2048;
+    req.body.max_new_tokens = 2048;
   }
 
+  next();
+});
+
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "*");
+  res.header("Access-Control-Allow-Methods", "*");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
