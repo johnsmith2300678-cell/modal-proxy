@@ -4,6 +4,8 @@ const https = require("https");
 
 const app = express();
 
+const TARGET = "https://api.us-west-2.modal.direct";
+
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "*");
@@ -173,38 +175,6 @@ she crossed the room and crawled onto the bed in one fluid motion, cradling his 
 
 ━━━ THAT IS THE VOICE. write everything in that voice. ━━━`;
 
-// ─── FORWARD REQUEST USING BUILT-IN HTTPS ─────────────────────────────────────
-function forwardRequest(targetUrl, method, headers, body) {
-  return new Promise((resolve, reject) => {
-    const url    = new URL(targetUrl);
-    const payload = body ? JSON.stringify(body) : null;
-
-    const options = {
-      hostname: url.hostname,
-      path:     url.pathname + url.search,
-      method:   method,
-      headers:  {
-        ...headers,
-        "content-type": "application/json",
-        ...(payload ? { "content-length": Buffer.byteLength(payload) } : {}),
-      },
-    };
-
-    // Remove headers that break the outgoing request
-    delete options.headers["host"];
-    delete options.headers["transfer-encoding"];
-
-    const proxyReq = https.request(options, (proxyRes) => {
-      resolve(proxyRes);
-    });
-
-    proxyReq.on("error", reject);
-
-    if (payload) proxyReq.write(payload);
-    proxyReq.end();
-  });
-}
-
 // ─── MAIN ROUTE ───────────────────────────────────────────────────────────────
 app.all("*", async (req, res) => {
   if (req.method === "OPTIONS") return res.sendStatus(200);
@@ -236,8 +206,6 @@ app.all("*", async (req, res) => {
     body.top_p             = body.top_p             ?? 0.95;
     body.frequency_penalty = body.frequency_penalty ?? 0.6;
     body.presence_penalty  = body.presence_penalty  ?? 0.5;
-
-    // ── REMOVE thinking mode — GLM-5 doesn't support it, it causes the hang ──
     delete body.thinking;
   }
 
@@ -278,3 +246,19 @@ app.all("*", async (req, res) => {
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
+
+// ─── KEEP ALIVE — prevents Render free tier from sleeping ────────────────────
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || "";
+if (SELF_URL) {
+  setInterval(() => {
+    https.get(SELF_URL, (res) => {
+      console.log("Keep-alive ping:", res.statusCode);
+    }).on("error", (err) => {
+      console.error("Keep-alive failed:", err.message);
+    });
+  }, 10 * 60 * 1000);
+}
+
+app.listen(process.env.PORT || 3000, () =>
+  console.log("Proxy running on port", process.env.PORT || 3000)
+);
