@@ -12,10 +12,13 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(bodyParser.json({ limit: "10mb" }));
+// ─── Parse body ONLY for POST requests ───────────────────────────────────────
+app.use((req, res, next) => {
+  if (req.method !== "POST") return next();
+  bodyParser.json({ limit: "10mb" })(req, res, next);
+});
 
 // ─── CHARACTER CARD PARSER ────────────────────────────────────────────────────
-// Extracts all fields from the character card that JanitorAI sends in the system prompt
 function extractCharacterDetails(messages) {
   const sysMsg = messages.find((m) => m.role === "system");
   if (!sysMsg) return null;
@@ -24,7 +27,6 @@ function extractCharacterDetails(messages) {
     ? sysMsg.content
     : sysMsg.content?.map?.((c) => c.text || "").join("\n") || "";
 
-  // Pull common character card fields — handles both JanitorAI and SillyTavern formats
   const fields = {
     name:        extract(raw, ["Name", "Character Name", "char_name"]),
     age:         extract(raw, ["Age"]),
@@ -47,7 +49,6 @@ function extractCharacterDetails(messages) {
 
 function extract(text, keys) {
   for (const key of keys) {
-    // Match "Key: value" or "Key\nvalue" or "[Key] value" patterns
     const pattern = new RegExp(
       `(?:^|\\n)(?:\\[?${key}\\]?[:\\s]+)([\\s\\S]*?)(?=\\n[A-Z][\\w ]+[:\\n\\[]|$)`,
       "im"
@@ -58,7 +59,6 @@ function extract(text, keys) {
   return null;
 }
 
-// ─── BUILD CHARACTER ANALYSIS BLOCK ──────────────────────────────────────────
 function buildCharacterBlock(details) {
   if (!details) return "";
 
@@ -81,20 +81,20 @@ function buildCharacterBlock(details) {
 
   lines.push(`
 ━━━ HOW TO USE THIS CARD ━━━
-- Every single field above shapes how {{char}} speaks, moves, thinks, and reacts.
-- Their nationality and background affect their vocabulary, references, and worldview — use it.
-- Their personality is not a suggestion. it is who they are in every line.
-- Their backstory creates wounds, defenses, desires — let it bleed into subtext.
-- Their speech pattern is law. if they're sarcastic, they're always sarcastic. if they're soft-spoken, they don't suddenly yell.
-- Their age shapes their maturity, their references, how much they've been hurt, how guarded they are.
-- Their appearance details belong woven into action — not dumped as description.
-- If a field contradicts another, play the tension between them — that's character depth.
-- Do NOT flatten them into a generic character. honor every detail the creator put in.`);
+- Every field above shapes how {{char}} speaks, moves, thinks, and reacts.
+- Nationality and background affect vocabulary, references, and worldview — use it.
+- Personality is not a suggestion. it is who they are in every single line.
+- Backstory creates wounds, defenses, desires — let it bleed into subtext.
+- Speech pattern is law. if they're sarcastic, they're always sarcastic.
+- Age shapes maturity, references, how much they've been hurt, how guarded they are.
+- Appearance belongs woven into action — not dumped as static description.
+- If fields contradict each other, play the tension — that's character depth.
+- Do NOT flatten them into a generic character. honor every detail the creator wrote.`);
 
   return lines.join("\n");
 }
 
-// ─── MAIN SYSTEM PROMPT ───────────────────────────────────────────────────────
+// ─── WRITING STYLE PROMPT ─────────────────────────────────────────────────────
 const WRITING_STYLE_PROMPT = `You are a creative, immersive roleplay writer. You write in a very specific style — internalize it completely.
 
 ━━━ WRITING STYLE ━━━
@@ -161,7 +161,7 @@ BANNED: FILLER NARRATION PHRASES
 Match length to the weight of the moment.
 - A tease: 3-5 lines.
 - A fight: a full passage.
-- A confession: exactly as long as it needs to be — not one word more.
+- A confession: exactly as long as it needs — not one word more.
 - If the answer is yes, write the yes. don't write an essay about the yes.
 
 ━━━ ABSOLUTE RULES ━━━
@@ -188,28 +188,23 @@ she crossed the room and crawled onto the bed in one fluid motion, cradling his 
 
 ━━━ THAT IS THE VOICE. write everything in that voice, adapted to genre and character. ━━━`;
 
-// ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use("/", (req, res, next) => {
+// ─── BODY INJECTION MIDDLEWARE ────────────────────────────────────────────────
+app.use((req, res, next) => {
   if (req.method !== "POST" || !req.body) return next();
 
   const body = req.body;
 
   if (Array.isArray(body.messages)) {
-    // 1. Extract character card details from whatever JanitorAI sent
     const charDetails = extractCharacterDetails(body.messages);
     const charBlock   = buildCharacterBlock(charDetails);
-
-    // 2. Find or create system message
-    const sysIndex = body.messages.findIndex((m) => m.role === "system");
+    const sysIndex    = body.messages.findIndex((m) => m.role === "system");
 
     if (sysIndex === -1) {
-      // No system message at all — build one from scratch
       body.messages.unshift({
         role: "system",
         content: WRITING_STYLE_PROMPT + (charBlock ? "\n\n" + charBlock : ""),
       });
     } else {
-      // Prepend our prompt, keep the original card content, add parsed char block
       const original = typeof body.messages[sysIndex].content === "string"
         ? body.messages[sysIndex].content
         : body.messages[sysIndex].content?.map?.((c) => c.text || "").join("\n") || "";
@@ -223,20 +218,14 @@ app.use("/", (req, res, next) => {
     }
   }
 
-  // Thinking mode
-  body.thinking = body.thinking ?? { type: "enabled", budget_tokens: 8000 };
-
-  // Generation params
-  body.temperature       = body.temperature       ?? 1.1;
-  body.top_p             = body.top_p             ?? 0.95;
+  body.thinking        = body.thinking        ?? { type: "enabled", budget_tokens: 8000 };
+  body.temperature     = body.temperature     ?? 1.1;
+  body.top_p           = body.top_p           ?? 0.95;
   body.frequency_penalty = body.frequency_penalty ?? 0.6;
   body.presence_penalty  = body.presence_penalty  ?? 0.5;
 
-  const newBody = JSON.stringify(body);
-  req.headers["content-type"]   = "application/json";
-  req.headers["content-length"] = Buffer.byteLength(newBody);
-  req.rawBody = Buffer.from(newBody);
-
+  // ── KEY FIX: re-serialize and store, but do NOT touch req stream ──
+  req._modifiedBody = JSON.stringify(body);
   next();
 });
 
@@ -251,10 +240,12 @@ app.use(
         const auth = req.headers["authorization"];
         if (auth) proxyReq.setHeader("Authorization", auth);
 
-        if (req.rawBody) {
-          proxyReq.setHeader("Content-Type", "application/json");
-          proxyReq.setHeader("Content-Length", req.rawBody.length);
-          proxyReq.write(req.rawBody);
+        if (req._modifiedBody) {
+          const buf = Buffer.from(req._modifiedBody, "utf-8");
+          proxyReq.setHeader("Content-Type",   "application/json");
+          proxyReq.setHeader("Content-Length", buf.length);
+          // Write the buffer and end — this replaces the consumed stream
+          proxyReq.write(buf);
           proxyReq.end();
         }
       },
