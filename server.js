@@ -1,10 +1,9 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const axios = require("axios");
+const https = require("https");
 
 const app = express();
 
-// ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "*");
@@ -174,37 +173,63 @@ she crossed the room and crawled onto the bed in one fluid motion, cradling his 
 
 ━━━ THAT IS THE VOICE. write everything in that voice. ━━━`;
 
-// ─── MAIN ROUTE — replaces proxy entirely ────────────────────────────────────
+// ─── FORWARD REQUEST USING BUILT-IN HTTPS ─────────────────────────────────────
+function forwardRequest(targetUrl, method, headers, body) {
+  return new Promise((resolve, reject) => {
+    const url    = new URL(targetUrl);
+    const payload = body ? JSON.stringify(body) : null;
+
+    const options = {
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method:   method,
+      headers:  {
+        ...headers,
+        "content-type": "application/json",
+        ...(payload ? { "content-length": Buffer.byteLength(payload) } : {}),
+      },
+    };
+
+    // Remove headers that break the outgoing request
+    delete options.headers["host"];
+    delete options.headers["transfer-encoding"];
+
+    const proxyReq = https.request(options, (proxyRes) => {
+      resolve(proxyRes);
+    });
+
+    proxyReq.on("error", reject);
+
+    if (payload) proxyReq.write(payload);
+    proxyReq.end();
+  });
+}
+
+// ─── MAIN ROUTE ───────────────────────────────────────────────────────────────
+const TARGET = "https://api.us-west-2.modal.direct";
+
 app.all("*", async (req, res) => {
   if (req.method === "OPTIONS") return res.sendStatus(200);
 
-  const TARGET = "https://api.us-west-2.modal.direct";
-  const url    = TARGET + req.path + (req.url.includes("?") ? "?" + req.url.split("?")[1] : "");
+  let body = req.body;
 
-  // Forward all headers except host
-  const headers = { ...req.headers };
-  delete headers["host"];
-  delete headers["content-length"]; // axios recalculates this
-
-  let data = req.body;
-
-  // Only mutate POST requests with a messages array
-  if (req.method === "POST" && data && Array.isArray(data.messages)) {
-    const charDetails = extractCharacterDetails(data.messages);
+  // Mutate POST requests
+  if (req.method === "POST" && body && Array.isArray(body.messages)) {
+    const charDetails = extractCharacterDetails(body.messages);
     const charBlock   = buildCharacterBlock(charDetails);
-    const sysIndex    = data.messages.findIndex((m) => m.role === "system");
+    const sysIndex    = body.messages.findIndex((m) => m.role === "system");
 
     if (sysIndex === -1) {
-      data.messages.unshift({
+      body.messages.unshift({
         role: "system",
         content: WRITING_STYLE_PROMPT + (charBlock ? "\n\n" + charBlock : ""),
       });
     } else {
-      const original = typeof data.messages[sysIndex].content === "string"
-        ? data.messages[sysIndex].content
-        : data.messages[sysIndex].content?.map?.((c) => c.text || "").join("\n") || "";
+      const original = typeof body.messages[sysIndex].content === "string"
+        ? body.messages[sysIndex].content
+        : body.messages[sysIndex].content?.map?.((c) => c.text || "").join("\n") || "";
 
-      data.messages[sysIndex].content =
+      body.messages[sysIndex].content =
         WRITING_STYLE_PROMPT +
         "\n\n" +
         (charBlock ? charBlock + "\n\n" : "") +
@@ -212,43 +237,32 @@ app.all("*", async (req, res) => {
         original;
     }
 
-    data.thinking          = data.thinking          ?? { type: "enabled", budget_tokens: 8000 };
-    data.temperature       = data.temperature       ?? 1.1;
-    data.top_p             = data.top_p             ?? 0.95;
-    data.frequency_penalty = data.frequency_penalty ?? 0.6;
-    data.presence_penalty  = data.presence_penalty  ?? 0.5;
+    body.thinking          = body.thinking          ?? { type: "enabled", budget_tokens: 8000 };
+    body.temperature       = body.temperature       ?? 1.1;
+    body.top_p             = body.top_p             ?? 0.95;
+    body.frequency_penalty = body.frequency_penalty ?? 0.6;
+    body.presence_penalty  = body.presence_penalty  ?? 0.5;
   }
 
   try {
-    const isStream = data?.stream === true;
+    const targetUrl  = TARGET + req.path + (req.url.includes("?") ? "?" + req.url.split("?")[1] : "");
+    const proxyRes   = await forwardRequest(targetUrl, req.method, req.headers, body);
 
-    const response = await axios({
-      method:       req.method,
-      url,
-      headers,
-      data,
-      responseType: isStream ? "stream" : "json",
-      // Don't let axios throw on 4xx/5xx so we can forward the error
-      validateStatus: () => true,
-    });
-
-    // Forward status and headers back to client
-    res.status(response.status);
-    Object.entries(response.headers).forEach(([k, v]) => {
+    // Forward status and headers
+    res.status(proxyRes.statusCode);
+    Object.entries(proxyRes.headers).forEach(([k, v]) => {
       try { res.setHeader(k, v); } catch (_) {}
     });
 
-    if (isStream) {
-      // Pipe the stream straight through
-      response.data.pipe(res);
-    } else {
-      res.json(response.data);
-    }
+    // Pipe response straight through (handles both stream and non-stream)
+    proxyRes.pipe(res);
 
   } catch (err) {
-    console.error("Proxy error:", err.message);
+    console.error("Request failed:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log("Proxy running on port", process.env.PORT || 3000));
+app.listen(process.env.PORT || 3000, () =>
+  console.log("Proxy running on port", process.env.PORT || 3000)
+);
