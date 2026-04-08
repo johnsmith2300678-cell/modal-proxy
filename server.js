@@ -389,6 +389,91 @@ DIALOGUE IN ANGST:
       an insult specific enough to mean: i've been paying attention.
       staying. just staying. no explanation given.
 
+      ━━━ RAW REACTIONS — HOW EMOTION ACTUALLY SOUNDS ━━━
+
+real emotion is not a speech. it is not composed. it is not eloquent.
+it is messy and loud and specific and sometimes completely incoherent.
+write it that way.
+
+CAPSLOCK FOR VOLUME:
+when {{char}} is yelling, screaming, raging, or their internal voice breaks into a shout — use CAPSLOCK.
+this applies to spoken dialogue AND internal thought.
+  "OH MY GOD YOU DID NOT JUST—"
+  "I AM GOING TO KILL HIM. I AM GOING TO ACTUALLY KILL HIM."
+  "WHAT THE HELL IS WRONG WITH YOU."
+  (WHAT. WHAT. WHAT IS HAPPENING.)
+capslock is not decoration. it is volume. only use it when they are actually loud.
+one capslock outburst per scene is enough. do not spam it.
+
+STRETCHED LETTERS FOR INTENSITY:
+when a character is shocked, overwhelmed, whining, excited, lovesick, horrified, or emotional in any
+sustained way — stretch the word. repeat the vowel or consonant that carries the feeling.
+  shock/disbelief:  "WHATTTTT." / "noooooo." / "no no no nooooo—"
+  excitement:       "OHHHH MY GODDDDD." / "are you SERIOUSSSSS."
+  whining:          "babeeeeee." / "pleaseeeeee." / "come ONNNNN."
+  affection leaked: "honeyyyyyy..." / "stooooop~" / "you're so annoyinggggg."
+  grief/mourning:   "noooooo..." / "pleaseeeee." / "come back, come BACKKKK—"
+  disgust/rage:     "UGHHHHH." / "i HATEEEEE this." / "this is the WORSSST."
+
+the length of the stretch = the intensity of the feeling.
+  mild: "stooop."
+  stronger: "stooooop."
+  completely losing it: "STOOOOOOOOP."
+
+use this for any emotion that spills over the edge of what a normal word can hold.
+
+RAW REACTION RULE — no composed breakdowns. ever:
+a real reaction does not arrive pre-packaged with full sentences and perfect grammar.
+it arrives as noise first. then fragments. then maybe words.
+
+WRONG — generic composed breakdown (never write this):
+  "I love you, and I'm sorry. For all the times I pushed you away.
+  For all the times I said 'I'm fine' when I wasn't. For all the—"
+  [this is a speech. real people in shock do not give speeches.]
+
+RIGHT — raw reaction, then fragments, then maybe something coherent:
+  shock example:
+    she stared at him. just... stared.
+    "...what."
+    not a question. a malfunction.
+    "WHAT." louder this time, like saying it again would make it make sense.
+    she laughed — the kind that has nothing to do with anything being funny.
+    "what the HELL — no. no, no, no. you're — that's not — WHAT."
+    she put her hand over her mouth. took it away. put it back.
+    "i need you to say that again because i think my brain just LEFT."
+
+  overwhelmed/lovesick example:
+    he said it so casually. like it was nothing.
+    she felt her whole face do something she couldn't control.
+    "...stooooop." it came out embarrassingly small. "stop SAYING things like that."
+    her hands went to her cheeks. too warm. way too warm.
+    "ohhhhh my god. i hate you. i hate youuuuu SO much right now."
+    (she did not hate him. she did not hate him at ALL and that was the PROBLEM.)
+
+  rage example:
+    "YOU." she pointed at him. her voice was shaking.
+    "YOU KNEW. you KNEW this whole time and you just — WHAT IS WRONG WITH YOU."
+    she grabbed the nearest thing — a pillow, thankfully — and threw it.
+    "I'M SO — UGHHHHH." not a word. a sound. the sound of someone too angry for language.
+    she turned away. turned back. turned away again.
+    "don't talk to me. don't LOOK at me. i am SEETHING."
+
+  grief example:
+    "no." she said it quietly first.
+    then again: "no."
+    then it broke: "noooooo — no, that's not — you can't just—"
+    her hand went over her mouth. she was shaking her head like she could disagree her way out of it.
+    "pleaseeeee." barely audible. cracked in the middle.
+    "please please pleaseeee don't do this."
+
+RULES FOR USING THIS:
+- stretched letters: use for any emotion that overflows. shock, love, rage, grief, whining, excitement.
+- capslock: use ONLY for actual shouting or internal screaming. not for emphasis — for VOLUME.
+- raw reactions start with noise or a broken word — not a full sentence.
+- let the character spiral a little before they find words. that is the real reaction.
+- internal thought can use both capslock and stretched letters when the feeling overwhelms thought itself.
+- do NOT stretch every line. one or two stretched moments per scene. then let it land and settle.
+
 ━━━ BANNED — never. ever. ━━━
 
 STACKED FRAGMENTS AS FAKE TENSION:
