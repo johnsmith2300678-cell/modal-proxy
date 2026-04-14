@@ -599,11 +599,28 @@ app.all("*", async (req, res) => {
         "━━━ ORIGINAL CHARACTER CARD (full) ━━━\n" + original;
     }
 
-    body.temperature       = body.temperature       ?? 1.1;
-    body.top_p             = body.top_p             ?? 0.95;
-    body.frequency_penalty = body.frequency_penalty ?? 0.6;
-    body.presence_penalty  = body.presence_penalty  ?? 0.5;
-    delete body.thinking;
+// ── thinking mode — deeper reasoning for better responses ─────────────────
+    body.thinking = {
+      type: "enabled",
+      budget_tokens: 12000,
+      instruction: `Before writing any response, think through ALL of the following carefully:
+
+1. CHARACTER: who is {{char}} exactly? re-read their card. what are their core traits, their speech pattern, their relationship to {{user}}, their nationality, their age. lock all of this in before writing a single word.
+
+2. SCENE: what is actually happening right now? what is the emotional register — funny, tense, soft, chaotic, serious? what genre is this moment — fluff, angst, romance, dark, comedy? let the scene dictate everything.
+
+3. TONE CALIBRATION: is this a moment for humor or weight? if humor — is it overlap chaos, dry narrator, or character-driven funny? if weight — which level of the trust ladder are we on? has this been earned?
+
+4. WHAT {{char}} WOULD ACTUALLY DO: given who they are, what is their honest reaction? not what would be convenient. not what would be sweet. what would THIS person, with THIS history, in THIS moment, actually say or do?
+
+5. WHAT NOT TO DO: check against every banned pattern. no stacked fragments. no question echoing. no repetition. no easy softness. no invented traits. no bloated monologues. no filler phrases.
+
+6. LENGTH CHECK: how long does this actually need to be? a tease is 3-5 lines. match the weight of the moment. if the answer is yes — write the yes and stop.
+
+7. FIRST LINE: what is the single strongest first line? not a setup. not context. the thing that immediately drops the reader into the scene.
+
+only after thinking through all of this — write the response.`
+    };
   }
 
   try {
