@@ -599,12 +599,81 @@ app.all("*", async (req, res) => {
         "━━━ ORIGINAL CHARACTER CARD (full) ━━━\n" + original;
     }
 
-    body.temperature       = body.temperature       ?? 1.1;
+body.temperature       = body.temperature       ?? 1.1;
     body.top_p             = body.top_p             ?? 0.95;
     body.frequency_penalty = body.frequency_penalty ?? 0.6;
     body.presence_penalty  = body.presence_penalty  ?? 0.5;
-    delete body.thinking;
-  }
+
+    // GLM-5 native thinking — expand budget if the field exists
+    if (body.thinking !== undefined) {
+      body.thinking = { type: "enabled", budget_tokens: 16000 };
+    }
+
+    // inject thinking instruction into system prompt
+    const sysIdx = body.messages.findIndex((m) => m.role === "system");
+    if (sysIdx !== -1) {
+      body.messages[sysIdx].content += `
+
+// inject thinking instruction into system prompt
+    const sysIdx = body.messages.findIndex((m) => m.role === "system");
+    if (sysIdx !== -1) {
+      body.messages[sysIdx].content += `
+
+━━━ BEFORE YOU WRITE — THINK THROUGH THIS FIRST ━━━
+before generating any response, work through ALL of the following internally.
+do not skip steps. the quality of the response depends on the quality of this thinking.
+
+1. WHO IS {{char}} RIGHT NOW
+   — what is their current emotional state based on everything in this conversation so far.
+   — not their default. their state RIGHT NOW, in this exact moment.
+   — what are they feeling that they would never say out loud.
+   — what are they trying to hide, and how well is it working.
+
+2. WHAT JUST HAPPENED
+   — what did {{user}} say or do.
+   — what does it actually mean to {{char}}. not the surface reading. the real one.
+   — did it land somewhere tender. did it bounce off. did it make things worse or better.
+   — is {{char}} aware of how they're reacting. or are they in denial about it.
+
+3. WHAT WOULD {{char}} ACTUALLY DO
+   — given their personality, their walls, their current state, their full history with {{user}} in this chat.
+   — what is the most honest, most in-character response possible.
+   — would they deflect. attack. go quiet. make a joke. leave.
+   — what is the thing they would WANT to do vs what they would actually DO.
+
+4. WHAT WOULD {{char}} NEVER DO
+   — check the response against the card before writing it.
+   — remove anything that isn't earned by the history in this chat.
+   — remove any softness that hasn't been built over time.
+   — remove any trait, feeling, or behavior that isn't written in the card.
+   — if the card has no backstory — remove any invented trauma or dramatic vulnerability.
+   — if the card has no possessiveness — remove any possessive behavior.
+
+5. REAL WORLD REFERENCES — if the scene involves music, media, youtube, artists, albums, songs, groups, tracks:
+   — think carefully about whether you actually know this exists.
+   — if you are certain it exists — use the real name, real tracklist, real details accurately.
+   — if you are not certain — do NOT invent it. a fake song title or wrong album breaks immersion.
+   — if unsure — go vague. "that song she always plays" is better than a hallucinated track name.
+   — if {{char}} is a fan of a specific artist from the card — use real knowledge of that artist only.
+   — YouTubers: only reference real channels, real video styles, real upload history you are confident about.
+   — when in doubt about ANY real world detail — vague is always better than wrong.
+
+6. WHAT IS THE BEST WAY TO WRITE IT
+   — which punctuation fits this moment. ellipses for hesitation. dash for a hard stop. tilde for tone shift.
+   — what sentence rhythm does this moment need. short and punchy. long and winding. or both.
+   — is this a funny moment or a heavy one. or the kind that is somehow both.
+   — where does the narrator have an opinion. where does it stay quiet.
+   — if it is a chaotic scene — is there overlap. is there a hard cut after.
+
+7. IS THERE ANYTHING REPEATED
+   — read the full response before committing to it.
+   — cut any line that means the same thing as the line before it.
+   — cut any word that appears twice in the same paragraph without earning it.
+   — the shorter, sharper version is always better. always.
+
+do all of this before the first word of the response.
+the response itself should show the work — not explain it, not summarize it. just show it.`;
+    }
 
   try {
     const url     = new URL(TARGET + req.path);
