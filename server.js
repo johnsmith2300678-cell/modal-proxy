@@ -750,7 +750,7 @@ app.all("*", async (req, res) => {
         "━━━ ORIGINAL CHARACTER CARD (full) ━━━\n" + original;
     }
 
-    body.temperature       = body.temperature       ?? 1;
+    body.temperature       = body.temperature       ?? 1.1;
     body.top_p             = body.top_p             ?? 0.95;
     body.frequency_penalty = body.frequency_penalty ?? 0.6;
     body.presence_penalty  = body.presence_penalty  ?? 0.5;
