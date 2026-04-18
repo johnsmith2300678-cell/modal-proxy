@@ -783,7 +783,29 @@ try {
     const url     = new URL(TARGET + (req.path || "/"));
     const payload = Buffer.from(JSON.stringify(body), "utf-8");
 
-    const makeRequest = (attemptsLeft) => {
+    let fullResponse = "";
+    let lastChunk = "";
+
+    const makeRequest = (attemptsLeft, isContinuation) => {
+      let currentBody = body;
+
+      if (isContinuation && fullResponse) {
+        currentBody = JSON.parse(JSON.stringify(body));
+        const lastMsg = currentBody.messages[currentBody.messages.length - 1];
+        currentBody.messages.push({
+          role: "assistant",
+          content: fullResponse
+        });
+        currentBody.messages.push({
+          role: "user",
+          content: "[The previous response was cut off mid-scene. Continue EXACTLY from where you stopped. Do not restart. Do not summarize. Pick up from the last word and finish the scene completely.]"
+        });
+      }
+
+      const currentPayload = isContinuation
+        ? Buffer.from(JSON.stringify(currentBody), "utf-8")
+        : payload;
+
       const options = {
         hostname: url.hostname,
         path:     url.pathname + url.search,
@@ -791,7 +813,7 @@ try {
         timeout:  300000,
         headers: {
           "content-type":   "application/json",
-          "content-length": payload.length,
+          "content-length": currentPayload.length,
           "authorization":  req.headers["authorization"] || "",
           "accept":         req.headers["accept"] || "*/*",
         },
@@ -810,56 +832,64 @@ try {
         const resetStallTimer = () => {
           if (stallTimer) clearTimeout(stallTimer);
           stallTimer = setTimeout(() => {
-            console.warn("Stream stalled — retrying...");
+            console.warn(`Stream stalled. Attempts left: ${attemptsLeft - 1}`);
             proxyReq.destroy();
-            if (attemptsLeft > 1 && !res.headersSent) {
-              makeRequest(attemptsLeft - 1);
-            } else if (!res.headersSent) {
-              res.status(504).json({ error: "Modal kept stalling. Try again." });
+            if (attemptsLeft > 1) {
+              makeRequest(attemptsLeft - 1, true);
+            } else {
+              if (!res.writableEnded) res.end();
             }
-          }, 30000); // 30 seconds of no data = stalled
+          }, 30000);
         };
 
         resetStallTimer();
 
         proxyRes.on("data", (chunk) => {
           resetStallTimer();
+          const text = chunk.toString();
+          fullResponse += text;
           res.write(chunk);
         });
 
         proxyRes.on("end", () => {
           if (stallTimer) clearTimeout(stallTimer);
-          res.end();
+          if (!res.writableEnded) res.end();
         });
 
         proxyRes.on("error", (err) => {
           if (stallTimer) clearTimeout(stallTimer);
           console.error("Response error:", err.message);
-          if (!res.headersSent) res.status(500).json({ error: err.message });
+          if (attemptsLeft > 1) {
+            makeRequest(attemptsLeft - 1, true);
+          } else {
+            if (!res.writableEnded) res.end();
+          }
         });
       });
 
       proxyReq.on("error", (err) => {
         console.error("Request error:", err.message);
-        if (attemptsLeft > 1 && !res.headersSent) {
-          console.warn("Retrying after error...");
-          makeRequest(attemptsLeft - 1);
-        } else if (!res.headersSent) {
-          res.status(500).json({ error: err.message });
+        if (attemptsLeft > 1) {
+          makeRequest(attemptsLeft - 1, true);
+        } else {
+          if (!res.headersSent) res.status(500).json({ error: err.message });
         }
       });
 
       proxyReq.on("timeout", () => {
-        console.error("Request timed out");
         proxyReq.destroy();
-        if (!res.headersSent) res.status(504).json({ error: "Modal took too long to respond" });
+        if (attemptsLeft > 1) {
+          makeRequest(attemptsLeft - 1, true);
+        } else {
+          if (!res.writableEnded) res.end();
+        }
       });
 
-      proxyReq.write(payload);
+      proxyReq.write(currentPayload);
       proxyReq.end();
     };
 
-    makeRequest(3); // tries up to 3 times
+    makeRequest(5, false);
 
   } catch (err) {
     console.error("Handler error:", err.message);
