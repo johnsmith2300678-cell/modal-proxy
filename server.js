@@ -779,19 +779,22 @@ only after thinking through all of this — write the response.`,
     };
   }
 
-  try {
-const options = {
-  hostname: url.hostname,
-  path:     url.pathname + url.search,
-  method:   req.method,
-  timeout:  300000, // 5 minutes — gives Modal room to think
-  headers: {
-    "content-type":   "application/json",
-    "content-length": payload.length,
-    "authorization":  req.headers["authorization"] || "",
-    "accept":         req.headers["accept"] || "*/*",
-  },
-};
+try {
+    const url     = new URL(TARGET + (req.path || "/"));
+    const payload = Buffer.from(JSON.stringify(body), "utf-8");
+
+    const options = {
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method:   req.method,
+      timeout:  300000,
+      headers: {
+        "content-type":   "application/json",
+        "content-length": payload.length,
+        "authorization":  req.headers["authorization"] || "",
+        "accept":         req.headers["accept"] || "*/*",
+      },
+    };
 
     const proxyReq = https.request(options, (proxyRes) => {
       res.status(proxyRes.statusCode);
@@ -801,17 +804,17 @@ const options = {
       proxyRes.pipe(res);
     });
 
-proxyReq.on("error", (err) => {
-  console.error("Request error:", err.message);
-  if (!res.headersSent) res.status(500).json({ error: err.message });
-});
+    proxyReq.on("error", (err) => {
+      console.error("Request error:", err.message);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
 
-proxyReq.on("timeout", () => {
-  console.error("Request timed out");
-  proxyReq.destroy();
-  if (!res.headersSent) res.status(504).json({ error: "Modal took too long to respond" });
-});
-    
+    proxyReq.on("timeout", () => {
+      console.error("Request timed out");
+      proxyReq.destroy();
+      if (!res.headersSent) res.status(504).json({ error: "Modal took too long to respond" });
+    });
+
     proxyReq.write(payload);
     proxyReq.end();
 
