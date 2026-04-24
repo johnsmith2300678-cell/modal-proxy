@@ -1165,7 +1165,7 @@ app.all("*", async (req, res) => {
                 const json = JSON.parse(line.slice(6));
                 const delta = json.choices?.[0]?.delta?.content || "";
                 // Only collect actual text content, skip thinking tokens
-                if (delta && !delta.includes("<think>") && !delta.includes("</think>")) {
+                if (delta) {
                   parsedContent += delta;
                 }
               } catch (_) {}
